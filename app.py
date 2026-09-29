@@ -6,6 +6,7 @@ from src.ui import (
     SENTIMENT_COLORS,
     apply_page_config, inject_css, render_hero,
     section_title, render_empty_state, render_poster_card,
+    inject_moviedb_css, render_topnav, render_backdrop_hero, render_stat_strip,
 )
 from src.data import load_data
 from src.api import run_analysis
@@ -19,7 +20,8 @@ GROQ_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]
 # --- Init ---
 apply_page_config()
 inject_css()
-render_hero()
+inject_moviedb_css()
+render_topnav(username="Merl")
 
 # --- Secrets ---
 try:
@@ -59,6 +61,44 @@ with st.sidebar:
 
 # --- Filter the data ---
 filtered_df = df[df["genre"].isin(genre_filter) & df["movie"].isin(movie_filter)]
+
+# --- Show backdrop hero (after analysis) or the plain hero (before) ---
+if "results_df" in st.session_state:
+    _r = st.session_state["results_df"]
+    _featured = _r.groupby("movie").size().idxmax()
+    _frows = _r[_r["movie"] == _featured]
+    _pos = int((_frows["sentiment"] == "Positive").sum())
+    _neg = int((_frows["sentiment"] == "Negative").sum())
+    _neu = int((_frows["sentiment"] == "Neutral").sum())
+    _total = len(_frows)
+    _pos_rate = _pos / _total if _total else 0
+    _genre = _frows["genre"].iloc[0]
+    _year = _frows["year"].iloc[0] if "year" in _frows.columns else None
+    _year_txt = f" · {int(_year)}" if pd.notna(_year) else ""
+
+    render_backdrop_hero(
+        title=_featured,
+        backdrop_url=get_poster_url(_featured, _year),
+        rating=_pos_rate * 10,
+        rating_count=_total,
+        meta_line=f"{_genre}{_year_txt}",
+        synopsis=(
+            f"Most-reviewed title in this run — {_total} review"
+            f"{'s' if _total != 1 else ''} analyzed, {_pos} positive, "
+            f"{_neg} negative, {_neu} neutral."
+        ),
+    )
+    render_stat_strip([
+        ("Positive", str(int((_r["sentiment"] == "Positive").sum())),
+         "linear-gradient(135deg,#16a34a,#22c55e)"),
+        ("Negative", str(int((_r["sentiment"] == "Negative").sum())),
+         "linear-gradient(135deg,#b91c1c,#ef4444)"),
+        ("Neutral", str(int((_r["sentiment"] == "Neutral").sum())),
+         "linear-gradient(135deg,#475569,#94a3b8)"),
+    ])
+    st.markdown("<div style='height:34px'></div>", unsafe_allow_html=True)
+else:
+    render_hero()
 
 # --- Reviews Selected card ---
 st.markdown(f"""

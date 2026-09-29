@@ -367,3 +367,237 @@ def render_poster_card(title: str, year, genre: str, poster_url: str,
         </div>
     </div>
     """, unsafe_allow_html=True)
+# ---------------------------------------------------------------
+# MOVIE-DB STYLE TOP NAV + BACKDROP HERO
+# (add-on components — call these instead of / alongside render_hero())
+# ---------------------------------------------------------------
+
+def inject_moviedb_css():
+    """Extra CSS for the top-nav + backdrop hero look. Call once, after inject_css()."""
+    st.markdown("""
+    <style>
+        /* ---------- TOP NAV ---------- */
+        .topnav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 8px;
+        }
+        .topnav .brand {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 800;
+            font-size: 1.25rem;
+            letter-spacing: 1px;
+            color: #ffffff;
+        }
+        .topnav .brand span { color: #a855f7; }
+        .topnav .links {
+            display: flex;
+            gap: 28px;
+        }
+        .topnav .links a {
+            color: rgba(229,231,235,0.75);
+            text-decoration: none;
+            font-size: 0.82rem;
+            font-weight: 600;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+        }
+        .topnav .links a:hover { color: #a855f7; }
+        .topnav .user {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: rgba(229,231,235,0.8);
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .topnav .avatar {
+            width: 34px; height: 34px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #a855f7, #db2777);
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: 700; font-size: 0.85rem;
+        }
+
+        /* ---------- BACKDROP HERO ---------- */
+        .backdrop-hero {
+            position: relative;
+            border-radius: 24px;
+            overflow: hidden;
+            margin-bottom: 30px;
+            min-height: 460px;
+            display: flex;
+            align-items: flex-end;
+            border: 1px solid rgba(168,85,247,0.2);
+        }
+        .backdrop-hero .bg-img {
+            position: absolute; inset: 0;
+            background-size: cover;
+            background-position: center 20%;
+            filter: brightness(0.55) saturate(1.1);
+            transform: scale(1.02);
+        }
+        .backdrop-hero .bg-gradient {
+            position: absolute; inset: 0;
+            background: linear-gradient(0deg, rgba(10,10,15,0.97) 5%, rgba(10,10,15,0.55) 55%, rgba(10,10,15,0.15) 100%),
+                        linear-gradient(90deg, rgba(10,10,15,0.75) 0%, transparent 55%);
+        }
+        .backdrop-hero .content {
+            position: relative;
+            padding: 40px 44px 34px 44px;
+            width: 100%;
+        }
+        .backdrop-hero .eyebrow {
+            color: rgba(233,213,255,0.85);
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+        .backdrop-hero h1 {
+            font-family: 'Poppins', sans-serif;
+            font-size: 2.6rem;
+            font-weight: 800;
+            color: #ffffff;
+            margin: 0 0 10px 0;
+            letter-spacing: -0.5px;
+            text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .backdrop-hero .rating-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 14px;
+        }
+        .backdrop-hero .star {
+            color: #facc15;
+            font-size: 1.1rem;
+        }
+        .backdrop-hero .rating-val {
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 1.05rem;
+        }
+        .backdrop-hero .meta-line {
+            color: rgba(229,231,235,0.65);
+            font-size: 0.82rem;
+            letter-spacing: 0.3px;
+        }
+        .backdrop-hero .synopsis {
+            color: rgba(229,231,235,0.85);
+            max-width: 620px;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            margin: 16px 0;
+        }
+        .backdrop-hero .credit-line {
+            font-size: 0.8rem;
+            color: rgba(229,231,235,0.55);
+            margin-top: 4px;
+        }
+        .backdrop-hero .credit-line b { color: rgba(233,213,255,0.85); font-weight: 600; }
+
+        /* ---------- STAT STRIP (Latest / Upcoming / Trailer style) ---------- */
+        .stat-strip {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+            margin-top: -54px;
+            position: relative;
+            z-index: 5;
+            padding: 0 44px;
+        }
+        .stat-card {
+            border-radius: 16px;
+            padding: 20px 22px;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            box-shadow: 0 14px 30px rgba(0,0,0,0.35);
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .stat-card .label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.85);
+            margin-bottom: 4px;
+        }
+        .stat-card .value {
+            font-family: 'Poppins', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #ffffff;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+def render_topnav(brand: str = "MOVIE DB", username: str = "Guest",
+                   links: list[str] | None = None):
+    links = links or ["Discover", "Dashboard", "Keywords", "Ask the Data"]
+    initial = (username or "G")[0].upper()
+    links_html = "".join(f'<a href="#">{l}</a>' for l in links)
+    st.markdown(f"""
+    <div class="topnav">
+        <div class="brand">{brand[:-2] if brand.endswith(' DB') else brand}<span>{' DB' if brand.endswith(' DB') else ''}</span></div>
+        <div class="links">{links_html}</div>
+        <div class="user">
+            <span>{username}</span>
+            <div class="avatar">{initial}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_backdrop_hero(title: str, backdrop_url: str, rating: float,
+                          rating_count: int, meta_line: str, synopsis: str,
+                          director: str = "", stars: str = ""):
+    """
+    rating: 0-10 scale (e.g. positive_rate * 10)
+    rating_count: number of reviews analyzed
+    meta_line: e.g. "Action · Sci-Fi  |  2010"
+    """
+    credits = ""
+    if director:
+        credits += f'<div class="credit-line"><b>Director:</b> {director}</div>'
+    if stars:
+        credits += f'<div class="credit-line"><b>Stars:</b> {stars}</div>'
+
+    st.markdown(f"""
+    <div class="backdrop-hero">
+        <div class="bg-img" style="background-image:url('{backdrop_url}');"></div>
+        <div class="bg-gradient"></div>
+        <div class="content">
+            <div class="eyebrow">Featured · GenAI Sentiment Spotlight</div>
+            <h1>{title}</h1>
+            <div class="rating-row">
+                <span class="star">&#9733;</span>
+                <span class="rating-val">{rating:.1f}/10</span>
+                <span class="meta-line">based on {rating_count} review{'s' if rating_count != 1 else ''}</span>
+            </div>
+            <div class="meta-line">{meta_line}</div>
+            <div class="synopsis">{synopsis}</div>
+            {credits}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_stat_strip(stats: list[tuple[str, str, str]]):
+    """
+    stats: list of (label, value, css_gradient) tuples, e.g.
+        [("POSITIVE", "18", "linear-gradient(135deg,#16a34a,#22c55e)"),
+         ("NEGATIVE", "7",  "linear-gradient(135deg,#b91c1c,#ef4444)"),
+         ("NEUTRAL",  "5",  "linear-gradient(135deg,#475569,#94a3b8)")]
+    """
+    cards = "".join(
+        f'<div class="stat-card" style="background:{grad};">'
+        f'<div class="label">{label}</div><div class="value">{value}</div></div>'
+        for label, value, grad in stats
+    )
+    st.markdown(f'<div class="stat-strip">{cards}</div>', unsafe_allow_html=True)
