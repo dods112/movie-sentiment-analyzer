@@ -143,3 +143,40 @@ def top_keywords(results_df: pd.DataFrame, top_n: int = 15):
         coloraxis_showscale=False,
     )
     return fig, counts
+
+def avg_rating_by_movie(results_df: pd.DataFrame):
+    """Average star rating per movie (1-5), best first."""
+    if "rating" not in results_df.columns or results_df["rating"].notna().sum() == 0:
+        return None
+    data = (
+        results_df.dropna(subset=["rating"])
+        .groupby("movie")["rating"].agg(avg="mean", reviews="count").reset_index()
+    )
+    height = 28 * len(data) + 60
+    chart = alt.Chart(data).mark_bar(color="#a855f7", cornerRadiusEnd=4).encode(
+        x=alt.X("avg:Q", title="Average rating", scale=alt.Scale(domain=[0, 5])),
+        y=alt.Y("movie:N", sort="-x", title=None),
+        tooltip=["movie", alt.Tooltip("avg:Q", format=".2f", title="Avg rating"), "reviews"],
+    )
+    return chart.properties(height=height, background="transparent").configure_view(strokeWidth=0)
+
+
+def rating_distribution(results_df: pd.DataFrame):
+    """How many reviews gave 1..5 stars, split by AI sentiment."""
+    if "rating" not in results_df.columns or results_df["rating"].notna().sum() == 0:
+        return None
+    data = (
+        results_df.dropna(subset=["rating"])
+        .groupby(["rating", "sentiment"]).size().reset_index(name="count")
+    )
+    chart = alt.Chart(data).mark_bar(cornerRadius=3).encode(
+        x=alt.X("rating:O", title="Stars"),
+        y=alt.Y("count:Q", title="Reviews"),
+        color=alt.Color(
+            "sentiment:N",
+            scale=alt.Scale(domain=_SENT_DOMAIN, range=_SENT_RANGE),
+            legend=alt.Legend(title=None, orient="top"),
+        ),
+        tooltip=["rating", "sentiment", "count"],
+    )
+    return chart.properties(height=320, background="transparent").configure_view(strokeWidth=0)

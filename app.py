@@ -1,27 +1,17 @@
-"""Movie Review Sentiment Analyzer — main app. Emoji-free."""
-import pandas as pd
+"""Movie Review Sentiment Analyzer - router for the 4-page app."""
 import streamlit as st
 
-from src.ui import (
-    SENTIMENT_COLORS,
-    apply_page_config, inject_css, render_hero,
-    section_title, render_empty_state, render_poster_card,
-    inject_moviedb_css, render_topnav, render_backdrop_hero, render_stat_strip,
-)
+from src.ui import apply_page_config, inject_css, inject_moviedb_css, render_topnav
 from src.data import load_data
-from src.api import run_analysis
-from src.posters import get_poster_url
-from src import charts
-from src.chatbot import render_chatbot
 
+# --- Config ---
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 GROQ_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]
+MODEL = GROQ_MODELS[0]
 
-# --- Init ---
 apply_page_config()
 inject_css()
 inject_moviedb_css()
-render_topnav(username="Merl")
 
 # --- Secrets ---
 try:
@@ -29,300 +19,73 @@ try:
 except (KeyError, FileNotFoundError):
     GROQ_API_KEY = ""
 
+# --- Router state ---
+if "page" not in st.session_state:
+    st.session_state["page"] = "Home"
+if "selected_movie" not in st.session_state:
+    st.session_state["selected_movie"] = None
+
+if st.session_state["page"] == "Movie Detail" and not st.session_state["selected_movie"]:
+    st.session_state["page"] = "Home"
+
+# --- Handle banner / grid click: ?open_movie=Title ---
+open_movie = st.query_params.get("open_movie")
+if open_movie:
+    st.session_state["selected_movie"] = open_movie
+    st.session_state["page"] = "Movie Detail"
+    st.query_params.clear()
+    st.rerun()
+
 # --- Data ---
 df = load_data()
 
-# --- Sidebar: model + filters only ---
-with st.sidebar:
-    groq_model = st.selectbox("Model", options=GROQ_MODELS, index=0)
+# --- Top nav ---
+render_topnav(username="Merl")
 
-    st.markdown("---")
-
-    all_genres = sorted(df["genre"].unique())
-    all_movies = sorted(df["movie"].unique())
-
-    if "genre_filter" not in st.session_state:
-        st.session_state["genre_filter"] = all_genres
-    if "movie_filter" not in st.session_state:
-        st.session_state["movie_filter"] = all_movies
-
-    col_a, col_b = st.columns(2)
-    with col_a:
-        if st.button("Select all", use_container_width=True):
-            st.session_state["genre_filter"] = all_genres
-            st.session_state["movie_filter"] = all_movies
-    with col_b:
-        if st.button("Clear all", use_container_width=True):
-            st.session_state["genre_filter"] = []
-            st.session_state["movie_filter"] = []
-
-    genre_filter = st.multiselect("Genre", options=all_genres, key="genre_filter")
-    movie_filter = st.multiselect("Movie", options=all_movies, key="movie_filter")
-
-# --- Filter the data ---
-filtered_df = df[df["genre"].isin(genre_filter) & df["movie"].isin(movie_filter)]
-
-# --- Show backdrop hero (after analysis) or the plain hero (before) ---
-if "results_df" in st.session_state:
-    _r = st.session_state["results_df"]
-    _featured = _r.groupby("movie").size().idxmax()
-    _frows = _r[_r["movie"] == _featured]
-    _pos = int((_frows["sentiment"] == "Positive").sum())
-    _neg = int((_frows["sentiment"] == "Negative").sum())
-    _neu = int((_frows["sentiment"] == "Neutral").sum())
-    _total = len(_frows)
-    _pos_rate = _pos / _total if _total else 0
-    _genre = _frows["genre"].iloc[0]
-    _year = _frows["year"].iloc[0] if "year" in _frows.columns else None
-    _year_txt = f" · {int(_year)}" if pd.notna(_year) else ""
-
-    render_backdrop_hero(
-        title=_featured,
-        backdrop_url=get_poster_url(_featured, _year),
-        rating=_pos_rate * 10,
-        rating_count=_total,
-        meta_line=f"{_genre}{_year_txt}",
-        synopsis=(
-            f"Most-reviewed title in this run — {_total} review"
-            f"{'s' if _total != 1 else ''} analyzed, {_pos} positive, "
-            f"{_neg} negative, {_neu} neutral."
-        ),
-    )
-    render_stat_strip([
-        ("Positive", str(int((_r["sentiment"] == "Positive").sum())),
-         "linear-gradient(135deg,#16a34a,#22c55e)"),
-        ("Negative", str(int((_r["sentiment"] == "Negative").sum())),
-         "linear-gradient(135deg,#b91c1c,#ef4444)"),
-        ("Neutral", str(int((_r["sentiment"] == "Neutral").sum())),
-         "linear-gradient(135deg,#475569,#94a3b8)"),
-    ])
-    st.markdown("<div style='height:34px'></div>", unsafe_allow_html=True)
-else:
-    render_hero()
-
-# --- Reviews Selected card ---
-st.markdown(f"""
-<div style="
-    background: linear-gradient(180deg, rgba(30,30,45,0.7), rgba(20,20,32,0.7));
-    border: 1px solid rgba(168,85,247,0.18);
-    border-radius: 16px;
-    padding: 22px 26px;
-    margin-bottom: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 24px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
-">
-    <div>
-        <div style="
-            font-size: 0.72rem;
-            letter-spacing: 2.4px;
-            text-transform: uppercase;
-            color: rgba(229,231,235,0.55);
-            font-weight: 600;
-            margin-bottom: 6px;
-        ">Reviews Selected</div>
-        <div style="
-            font-family: 'Poppins', sans-serif;
-            font-size: 2.1rem;
-            font-weight: 700;
-            color: #ffffff;
-            line-height: 1;
-        ">{len(filtered_df)}</div>
-    </div>
-    <div style="
-        text-align: right;
-        font-size: 0.82rem;
-        color: rgba(229,231,235,0.55);
-        line-height: 1.6;
-    ">
-        of {len(df)} total reviews<br>
-        {len(genre_filter)} genre(s) · {len(movie_filter)} movie(s)
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# --- Run button ---
-run_button = st.button(
-    "Run GenAI Sentiment Analysis",
-    type="primary",
-    use_container_width=True,
-    key="run_analysis_btn",
-)
-
-st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
-
-# --- Analysis trigger ---
-if run_button:
-    if not GROQ_API_KEY:
-        st.error("No Groq API key found. Add `GROQ_API_KEY` to `.streamlit/secrets.toml`.")
-    elif filtered_df.empty:
-        st.warning("No reviews match your current filters.")
-    else:
-        reviews = filtered_df["review"].tolist()
-        progress = st.progress(0.0, text="Starting analysis...")
-
-        def cb(done, total):
-            progress.progress(done / total, text=f"Analyzing review {done} of {total}...")
-
-        results = run_analysis(
-            GROQ_API_KEY, GROQ_BASE_URL, groq_model, reviews, progress_cb=cb,
+nav_cols = st.columns([1, 1, 1, 1, 2])
+nav_items = [
+    ("Home", "nav_home"),
+    ("Dashboard", "nav_dashboard"),
+    ("Ask the Data", "nav_chat"),
+    ("My List", "nav_watchlist"),
+]
+for col, (label, key) in zip(nav_cols, nav_items):
+    with col:
+        active = st.session_state["page"] == label or (
+            label == "Home" and st.session_state["page"] == "Movie Detail"
         )
-        progress.empty()
+        if st.button(label, width="stretch", key=key,
+                     type="primary" if active else "secondary"):
+            st.session_state["page"] = label
+            st.rerun()
 
-        results_df = filtered_df.reset_index(drop=True).copy()
-        results_df["sentiment"] = [r["sentiment"] for r in results]
-        results_df["confidence"] = [r["confidence"] for r in results]
-        results_df["keywords"] = [", ".join(r["keywords"]) for r in results]
+st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
 
-        st.session_state["results_df"] = results_df
-        st.rerun()
+# --- Page routing ---
+page = st.session_state["page"]
 
-# =========================================================
-# 2 TABS: Dashboard + Ask the Data
-# =========================================================
-tab_dashboard, tab_chat = st.tabs(["Dashboard", "Ask the Data"])
+if page == "Home":
+    from src.pages.home import render_page
+    render_page(df, GROQ_API_KEY, GROQ_BASE_URL, MODEL)
 
-# ---------------------------------------------------------
-# TAB 1: Dashboard
-# ---------------------------------------------------------
-with tab_dashboard:
-    if "results_df" not in st.session_state:
-        render_empty_state()
-        st.markdown("<br>", unsafe_allow_html=True)
-        with st.expander("Preview dataset before analysis", expanded=True):
-            st.dataframe(filtered_df, use_container_width=True)
-            st.caption(f"{len(filtered_df)} reviews shown out of {len(df)} total.")
-    else:
-        results_df = st.session_state["results_df"]
-        total = len(results_df)
-        pos = int((results_df["sentiment"] == "Positive").sum())
-        neg = int((results_df["sentiment"] == "Negative").sum())
-        neu = int((results_df["sentiment"] == "Neutral").sum())
-        avg_conf = results_df["confidence"].mean()
+elif page == "Movie Detail":
+    from src.pages.movie_detail import render_page
+    render_page(df, st.session_state["selected_movie"], GROQ_API_KEY, GROQ_BASE_URL, MODEL)
 
-        m1, m2, m3, m4, m5 = st.columns(5)
-        m1.metric("Total reviews", total)
-        m2.metric("Positive", pos, f"{pos/total:.0%}" if total else "0%")
-        m3.metric("Negative", neg, f"{neg/total:.0%}" if total else "0%")
-        m4.metric("Neutral", neu, f"{neu/total:.0%}" if total else "0%")
-        m5.metric("Avg. confidence",
-                  f"{avg_conf:.0%}" if pd.notna(avg_conf) else "—")
+elif page == "Dashboard":
+    from src.pages.dashboard import render_page
+    render_page(df, GROQ_API_KEY, GROQ_BASE_URL, MODEL)
 
-        st.markdown("<br>", unsafe_allow_html=True)
+elif page == "Ask the Data":
+    from src.pages.ask_data import render_page
+    render_page(df, GROQ_API_KEY, GROQ_BASE_URL, MODEL)
 
-        # Movie Spotlight (poster wall)
-        section_title("Movie Spotlight")
-        movie_meta = (
-            results_df.groupby(["movie", "genre", "year"], dropna=False)
-            .size().reset_index(name="total")
-        )
-        piv = (
-            results_df.groupby(["movie", "sentiment"]).size()
-            .unstack(fill_value=0).reset_index()
-        )
-        for s in ("Positive", "Negative", "Neutral"):
-            if s not in piv.columns:
-                piv[s] = 0
-        movie_meta = movie_meta.merge(piv, on="movie", how="left")
+elif page == "My List":
+    from src.pages.watchlist import render_page
+    render_page(df, GROQ_API_KEY, GROQ_BASE_URL, MODEL)
 
-        cols = st.columns(5, gap="medium")
-        for i, row in movie_meta.iterrows():
-            poster = get_poster_url(row["movie"], row.get("year"))
-            with cols[i % 5]:
-                render_poster_card(
-                    title=row["movie"],
-                    year=row.get("year"),
-                    genre=row["genre"],
-                    poster_url=poster,
-                    total=int(row["total"]),
-                    pos=int(row["Positive"]),
-                    neg=int(row["Negative"]),
-                    neu=int(row["Neutral"]),
-                )
-            if (i + 1) % 5 == 0 and i + 1 < len(movie_meta):
-                cols = st.columns(5, gap="medium")
-                st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-        st.markdown("<br><br>", unsafe_allow_html=True)
-
-        # Sentiment Distribution + Confidence
-        col1, col2 = st.columns([1, 1.4])
-        with col1:
-            section_title("Sentiment Distribution")
-            st.plotly_chart(charts.sentiment_pie(results_df),
-                            use_container_width=True)
-        with col2:
-            section_title("Confidence Distribution")
-            hist = charts.confidence_histogram(results_df)
-            if hist is not None:
-                st.altair_chart(hist, use_container_width=True)
-            else:
-                st.info("No confidence scores available.")
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        section_title("Sentiment by Movie")
-        st.altair_chart(charts.sentiment_by_movie(results_df),
-                        use_container_width=True)
-
-        st.markdown("<br><br>", unsafe_allow_html=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            section_title("Sentiment by Genre")
-            st.plotly_chart(charts.sentiment_by_genre(results_df),
-                            use_container_width=True)
-        with col2:
-            section_title("Positive Rate by Genre")
-            st.altair_chart(charts.positive_rate_by_genre(results_df),
-                            use_container_width=True)
-
-        line = charts.reviews_over_time(results_df)
-        if line is not None:
-            st.markdown("<br>", unsafe_allow_html=True)
-            section_title("Reviews Over Time")
-            st.altair_chart(line, use_container_width=True)
-
-        st.markdown("<br><br>", unsafe_allow_html=True)
-
-        section_title("Top Keywords")
-        fig, counts = charts.top_keywords(results_df)
-        if fig is not None:
-            st.plotly_chart(fig, use_container_width=True)
-            with st.expander("Quick frequency table"):
-                st.bar_chart(counts.set_index("Keyword"))
-        else:
-            st.info("No keywords extracted yet.")
-
-        st.markdown("<br><br>", unsafe_allow_html=True)
-
-        section_title("Full Results Table")
-        st.dataframe(
-            results_df,
-            use_container_width=True,
-            column_config={
-                "confidence": st.column_config.ProgressColumn(
-                    "confidence", min_value=0, max_value=1, format="%.2f",
-                ),
-            },
-        )
-        st.download_button(
-            "Download results as CSV",
-            data=results_df.to_csv(index=False).encode("utf-8"),
-            file_name="sentiment_results.csv",
-            mime="text/csv",
-        )
-
-# ---------------------------------------------------------
-# TAB 2: Ask the Data (Messenger-style)
-# ---------------------------------------------------------
-with tab_chat:
-    context_df = st.session_state.get("results_df", filtered_df)
-    render_chatbot(
-        api_key=GROQ_API_KEY,
-        base_url=GROQ_BASE_URL,
-        model=groq_model,
-        context_df=context_df,
-    )
+# --- Floating chat ---
+if page != "Ask the Data":
+    from src.floating_chat import render_floating_chat
+    focus = st.session_state["selected_movie"] if page == "Movie Detail" else None
+    render_floating_chat(df, GROQ_API_KEY, GROQ_BASE_URL, MODEL, focus_movie=focus)

@@ -4,6 +4,7 @@ import json
 import re
 from typing import Any
 
+import openai
 from openai import AsyncOpenAI
 
 
@@ -19,6 +20,18 @@ Respond ONLY with valid JSON in this exact format:
 {{"sentiment": "Positive" | "Negative" | "Neutral", "confidence": 0-1 float, "keywords": ["kw1", "kw2", "kw3"]}}
 
 Review: \"\"\"{review}\"\"\""""
+
+
+MAX_RETRIES = 6
+
+
+def _retry_delay(err: Exception, attempt: int) -> float:
+    """Seconds to wait after a 429: use Groq's 'try again in ...' hint, else exponential backoff."""
+    m = re.search(r"try again in (\d+(?:\.\d+)?)(ms|s)\b", str(err))
+    if m:
+        wait = float(m.group(1)) / (1000 if m.group(2) == "ms" else 1)
+        return min(wait + 0.5, 30)
+    return min(2 ** attempt, 30)
 
 
 def _extract_json(raw: str) -> dict[str, Any]:
@@ -49,20 +62,29 @@ def _normalize(parsed: dict[str, Any]) -> dict[str, Any]:
 
 
 async def analyze_one(client: AsyncOpenAI, review: str, model: str) -> dict[str, Any]:
-    try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": USER_TEMPLATE.format(review=review)},
-            ],
-            temperature=0,
-            response_format={"type": "json_object"},
-        )
-        content = response.choices[0].message.content or ""
-        return _normalize(_extract_json(content))
-    except Exception as e:
-        return {"sentiment": "Error", "confidence": 0.0, "keywords": [str(e)[:80]]}
+    extra = {"reasoning_effort": "low"} if "gpt-oss" in model else {}  # fewer hidden tokens
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": USER_TEMPLATE.format(review=review)},
+                ],
+                temperature=0,
+                response_format={"type": "json_object"},
+                extra_body=extra,
+            )
+            content = response.choices[0].message.content or ""
+            return _normalize(_extract_json(content))
+        except openai.RateLimitError as e:
+            # A daily limit will not clear by waiting a few seconds, so give up right away.
+            if "per day" in str(e).lower() or attempt == MAX_RETRIES:
+                return {"sentiment": "Error", "confidence": 0.0, "keywords": [str(e)[:80]]}
+            await asyncio.sleep(_retry_delay(e, attempt))
+        except Exception as e:
+            return {"sentiment": "Error", "confidence": 0.0, "keywords": [str(e)[:80]]}
+    return {"sentiment": "Error", "confidence": 0.0, "keywords": ["retries exhausted"]}
 
 
 async def analyze_many(
@@ -71,9 +93,9 @@ async def analyze_many(
     model: str,
     reviews: list[str],
     progress_cb=None,
-    concurrency: int = 8,
+    concurrency: int = 3,
 ) -> list[dict[str, Any]]:
-    client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+    client = AsyncOpenAI(api_key=api_key, base_url=base_url, max_retries=0)
     sem = asyncio.Semaphore(concurrency)
     results: list[dict[str, Any]] = [None] * len(reviews)  # type: ignore
     done = 0

@@ -1,4 +1,6 @@
 """Visual theme + reusable UI components. Cinematic dark, editorial, emoji-free."""
+import html
+
 import streamlit as st
 
 SENTIMENT_COLORS = {
@@ -7,6 +9,11 @@ SENTIMENT_COLORS = {
     "Neutral":  "#94a3b8",
     "Error":    "#f59e0b",
 }
+
+
+def _esc(value) -> str:
+    """Escape text before putting it inside HTML (titles/reviews come from user data)."""
+    return html.escape(str(value), quote=True)
 
 
 def apply_page_config():
@@ -23,7 +30,7 @@ def apply_page_config():
                   "<circle cx='21' cy='19' r='1' fill='white'/>"
                   "</svg>",
         layout="wide",
-        initial_sidebar_state="expanded",
+        initial_sidebar_state="collapsed",
     )
 
 
@@ -291,44 +298,49 @@ def inject_css():
             margin-top: 16px;
             font-style: italic;
         }
+
+        /* ---------- MOBILE (general) ---------- */
+        @media (max-width: 768px) {
+            .block-container { padding-left: 1rem; padding-right: 1rem; }
+            .hero { padding: 28px 22px; border-radius: 18px; }
+            .hero h1 { font-size: 1.7rem; }
+            .empty-state { padding: 40px 18px; }
+        }
     </style>
     """, unsafe_allow_html=True)
 
 
 def render_hero():
-    st.markdown("""
-    <div class="hero">
-        <div class="eyebrow">GenAI Sentiment Dashboard</div>
-        <h1>Movie Review Sentiment Analyzer</h1>
-        <p class="subtitle">
-            Sentiment classification, keyword extraction, and trend visualization
-            across your movie review dataset — powered by Groq.
-        </p>
-        <div class="hero-badges">
-            <span class="hero-badge">Groq Inference</span>
-            <span class="hero-badge">Poster Wall</span>
-            <span class="hero-badge">Interactive Charts</span>
-            <span class="hero-badge">Ask the Data</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="hero">'
+        '<div class="eyebrow">GenAI Sentiment Dashboard</div>'
+        '<h1>Movie Review Sentiment Analyzer</h1>'
+        '<p class="subtitle">Sentiment classification, keyword extraction, and trend '
+        'visualization across your movie review dataset - powered by Groq.</p>'
+        '<div class="hero-badges">'
+        '<span class="hero-badge">Groq Inference</span>'
+        '<span class="hero-badge">Poster Wall</span>'
+        '<span class="hero-badge">Interactive Charts</span>'
+        '<span class="hero-badge">Ask the Data</span>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def section_title(text: str):
-    st.markdown(f'<div class="section-title">{text}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">{_esc(text)}</div>', unsafe_allow_html=True)
 
 
 def render_empty_state():
-    st.markdown("""
-    <div class="empty-state">
-        <div class="eyebrow">Awaiting Analysis</div>
-        <div class="headline">No results yet</div>
-        <div class="body">
-            Choose your filters in the sidebar, then run
-            <b>GenAI Sentiment Analysis</b> to populate the dashboard.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="empty-state">'
+        '<div class="eyebrow">Awaiting Analysis</div>'
+        '<div class="headline">No results yet</div>'
+        '<div class="body">Run <b>sentiment analysis</b> on the Dashboard, or post a '
+        'review, to see results here.</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def sentiment_dot(color: str) -> str:
@@ -346,30 +358,30 @@ def render_poster_card(title: str, year, genre: str, poster_url: str,
     pos_pct, neg_pct, neu_pct = pos / total, neg / total, neu / total
 
     if pos >= neg and pos >= neu:
-        label, color = f"Positive · {pos_pct:.0%}", SENTIMENT_COLORS["Positive"]
+        label, color = f"Positive | {pos_pct:.0%}", SENTIMENT_COLORS["Positive"]
     elif neg >= pos and neg >= neu:
-        label, color = f"Negative · {neg_pct:.0%}", SENTIMENT_COLORS["Negative"]
+        label, color = f"Negative | {neg_pct:.0%}", SENTIMENT_COLORS["Negative"]
     else:
-        label, color = f"Neutral · {neu_pct:.0%}", SENTIMENT_COLORS["Neutral"]
+        label, color = f"Neutral | {neu_pct:.0%}", SENTIMENT_COLORS["Neutral"]
 
-    year_txt = f" · {int(year)}" if year is not None and str(year) != "<NA>" else ""
+    year_txt = f" | {int(year)}" if year is not None and str(year) != "<NA>" else ""
     dot = sentiment_dot(color)
 
-    st.markdown(f"""
-    <div class="poster-card">
-        <img src="{poster_url}" alt="{title} poster" loading="lazy"/>
-        <div class="meta">
-            <div class="title">{title}</div>
-            <div class="sub">{genre}{year_txt} · {total} review{'s' if total != 1 else ''}</div>
-            <span class="pill" style="background:{color}22; color:{color}; border:1px solid {color}66;">
-                {dot}{label}
-            </span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="poster-card">'
+        f'<img src="{_esc(poster_url)}" alt="{_esc(title)} poster" loading="lazy"/>'
+        '<div class="meta">'
+        f'<div class="title">{_esc(title)}</div>'
+        f'<div class="sub">{_esc(genre)}{year_txt} | {total} review{"s" if total != 1 else ""}</div>'
+        f'<span class="pill" style="background:{color}22; color:{color}; border:1px solid {color}66;">'
+        f'{dot}{label}</span>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
 # ---------------------------------------------------------------
 # MOVIE-DB STYLE TOP NAV + BACKDROP HERO
-# (add-on components — call these instead of / alongside render_hero())
 # ---------------------------------------------------------------
 
 def inject_moviedb_css():
@@ -381,6 +393,7 @@ def inject_moviedb_css():
             display: flex;
             align-items: center;
             justify-content: space-between;
+            gap: 16px;
             padding: 18px 8px;
         }
         .topnav .brand {
@@ -420,6 +433,43 @@ def inject_moviedb_css():
             color: white; font-weight: 700; font-size: 0.85rem;
         }
 
+        /* ---------- HIDE UNUSED SIDEBAR (navigation is the top bar) ---------- */
+        section[data-testid="stSidebar"],
+        div[data-testid="stSidebarCollapsedControl"],
+        button[data-testid="stExpandSidebarButton"] { display: none !important; }
+
+        /* ---------- ACTIVE NAV BUTTON (type="primary") ---------- */
+        button[data-testid="stBaseButton-primary"], .stButton > button[kind="primary"] {
+            background: linear-gradient(135deg, #7c3aed, #db2777) !important;
+            color: #ffffff !important;
+            border: 1px solid transparent !important;
+        }
+
+        /* ---------- MOVIE CARD (fixed-height slots so every row lines up) ---------- */
+        .mcard img {
+            width: 100%; display: block; aspect-ratio: 2 / 3; object-fit: cover;
+            border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+            transition: transform .2s ease, box-shadow .2s ease;
+        }
+        .mcard img:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(168,85,247,0.3); }
+        .mcard .mtitle {
+            font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 0.95rem;
+            color: #ffffff; line-height: 1.3; margin-top: 10px;
+            height: 2.6em; overflow: hidden;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        }
+        .mcard .msub, .mcard .mrating {
+            font-size: 0.78rem; color: rgba(229,231,235,0.6); margin-top: 2px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .mcard .mrating { color: #cbd5e1; margin-top: 6px; }
+        .mcard .mslot { height: 30px; margin: 8px 0 10px; display: flex; align-items: center; }
+        .mcard .mbadge {
+            color: #ffffff; padding: 4px 10px; border-radius: 6px;
+            font-size: 0.75rem; font-weight: 600;
+        }
+        .mcard .mbadge.muted { background: rgba(148,163,184,0.18); color: #94a3b8; }
+
         /* ---------- BACKDROP HERO ---------- */
         .backdrop-hero {
             position: relative;
@@ -447,6 +497,7 @@ def inject_moviedb_css():
             position: relative;
             padding: 40px 44px 34px 44px;
             width: 100%;
+            box-sizing: border-box;
         }
         .backdrop-hero .eyebrow {
             color: rgba(233,213,255,0.85);
@@ -464,10 +515,12 @@ def inject_moviedb_css():
             margin: 0 0 10px 0;
             letter-spacing: -0.5px;
             text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            overflow-wrap: anywhere;
         }
         .backdrop-hero .rating-row {
             display: flex;
             align-items: center;
+            flex-wrap: wrap;
             gap: 14px;
             margin-bottom: 14px;
         }
@@ -499,7 +552,32 @@ def inject_moviedb_css():
         }
         .backdrop-hero .credit-line b { color: rgba(233,213,255,0.85); font-weight: 600; }
 
-        /* ---------- STAT STRIP (Latest / Upcoming / Trailer style) ---------- */
+        .backdrop-hero .play-btn {
+            display: inline-block; margin-top: 16px; padding: 10px 20px;
+            border-radius: 999px; font-weight: 700; font-size: 0.85rem;
+            color: #ffffff !important; text-decoration: none !important;
+            background: linear-gradient(135deg, #7c3aed, #db2777);
+            box-shadow: 0 8px 22px rgba(124,58,237,0.45);
+            transition: transform .15s ease;
+        }
+        .backdrop-hero .play-btn:hover { transform: translateY(-2px); }
+
+        /* ---------- STAR RATING (fractional stars) ---------- */
+        .stars {
+            position: relative; display: inline-block; white-space: nowrap;
+            color: rgba(148,163,184,0.35); letter-spacing: 1px; line-height: 1;
+            vertical-align: middle; font-size: 0.95em;
+        }
+        .stars i {
+            position: absolute; left: 0; top: 0; height: 100%; overflow: hidden;
+            white-space: nowrap; color: #facc15; font-style: normal;
+        }
+
+        /* ---------- COMPACT HERO (home page banner) ---------- */
+        .backdrop-hero.compact { min-height: 380px; margin-bottom: 14px; }
+        .backdrop-hero.compact h1 { font-size: 2.2rem; }
+
+        /* ---------- STAT STRIP ---------- */
         .stat-strip {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -508,6 +586,7 @@ def inject_moviedb_css():
             position: relative;
             z-index: 5;
             padding: 0 44px;
+            box-sizing: border-box;
         }
         .stat-card {
             border-radius: 16px;
@@ -518,6 +597,7 @@ def inject_moviedb_css():
             justify-content: flex-end;
             box-shadow: 0 14px 30px rgba(0,0,0,0.35);
             border: 1px solid rgba(255,255,255,0.08);
+            min-width: 0;
         }
         .stat-card .label {
             font-size: 0.72rem;
@@ -533,71 +613,115 @@ def inject_moviedb_css():
             font-weight: 800;
             color: #ffffff;
         }
+
+        /* ---------- RESPONSIVE ---------- */
+        /* Tablets and phones: tighter hero, smaller cards (still 3 across). */
+        @media (max-width: 768px) {
+            .topnav { padding: 12px 4px; }
+            .topnav .links { display: none; }
+
+            .backdrop-hero { min-height: 340px; border-radius: 18px; }
+            .backdrop-hero .content { padding: 24px 20px 44px 20px; }
+            .backdrop-hero h1 { font-size: 1.7rem; }
+            .backdrop-hero .synopsis { font-size: 0.88rem; margin: 10px 0; }
+
+            .stat-strip { padding: 0 14px; gap: 8px; margin-top: -34px; }
+            .stat-card { padding: 14px 12px; min-height: 76px; border-radius: 12px; }
+            .stat-card .label { font-size: 0.6rem; letter-spacing: 1px; }
+            .stat-card .value { font-size: 1.4rem; }
+        }
+        /* Very small phones: stack the three cards. */
+        @media (max-width: 420px) {
+            .stat-strip { grid-template-columns: 1fr; }
+            .stat-card { min-height: 64px; }
+        }
     </style>
     """, unsafe_allow_html=True)
 
 
 def render_topnav(brand: str = "MOVIE DB", username: str = "Guest",
-                   links: list[str] | None = None):
-    links = links or ["Discover", "Dashboard", "Keywords", "Ask the Data"]
-    initial = (username or "G")[0].upper()
-    links_html = "".join(f'<a href="#">{l}</a>' for l in links)
-    st.markdown(f"""
-    <div class="topnav">
-        <div class="brand">{brand[:-2] if brand.endswith(' DB') else brand}<span>{' DB' if brand.endswith(' DB') else ''}</span></div>
-        <div class="links">{links_html}</div>
-        <div class="user">
-            <span>{username}</span>
-            <div class="avatar">{initial}</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+                  links: list[str] | None = None):
+    """
+    Brand + user badge. `links` is empty by default: the old default links were
+    static (they did nothing), and real navigation is the Streamlit buttons under the bar.
+    """
+    links = links or []
+    initial = _esc((username or "G")[0].upper())
+    has_db = brand.endswith(" DB")
+    brand_main = _esc(brand[:-3] if has_db else brand)
+    brand_tail = " DB" if has_db else ""
+    links_html = "".join(f'<a href="#">{_esc(l)}</a>' for l in links)
+    st.markdown(
+        '<div class="topnav">'
+        f'<div class="brand">{brand_main}<span>{brand_tail}</span></div>'
+        f'<div class="links">{links_html}</div>'
+        f'<div class="user"><span>{_esc(username)}</span><div class="avatar">{initial}</div></div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def star_rating(value, max_stars: int = 5) -> str:
+    """Star icons for a rating, with partial fill (3.6 of 5 fills 72% of the row)."""
+    try:
+        v = max(0.0, min(float(value), float(max_stars)))
+    except (TypeError, ValueError):
+        v = 0.0
+    pct = 100 * v / max_stars
+    row = "&#9733;" * max_stars
+    return (f'<span class="stars" role="img" aria-label="{v:.1f} out of {max_stars}">'
+            f'{row}<i style="width:{pct:.0f}%">{row}</i></span>')
 
 
 def render_backdrop_hero(title: str, backdrop_url: str, rating: float,
-                          rating_count: int, meta_line: str, synopsis: str,
-                          director: str = "", stars: str = ""):
+                         rating_count: int, meta_line: str, synopsis: str,
+                         director: str = "", stars: str = "", trailer_url: str = "",
+                         eyebrow: str = "Featured | GenAI Sentiment Spotlight",
+                         compact: bool = False):
     """
-    rating: 0-10 scale (e.g. positive_rate * 10)
-    rating_count: number of reviews analyzed
-    meta_line: e.g. "Action · Sci-Fi  |  2010"
+    rating: 0-10 scale (the movie page passes avg 1-5 rating * 2)
+    rating_count: number of reviews
+    meta_line: e.g. "Action | 2010"
     """
     credits = ""
     if director:
-        credits += f'<div class="credit-line"><b>Director:</b> {director}</div>'
+        credits += f'<div class="credit-line"><b>Director:</b> {_esc(director)}</div>'
     if stars:
-        credits += f'<div class="credit-line"><b>Stars:</b> {stars}</div>'
+        credits += f'<div class="credit-line"><b>Stars:</b> {_esc(stars)}</div>'
 
-    st.markdown(f"""
-    <div class="backdrop-hero">
-        <div class="bg-img" style="background-image:url('{backdrop_url}');"></div>
-        <div class="bg-gradient"></div>
-        <div class="content">
-            <div class="eyebrow">Featured · GenAI Sentiment Spotlight</div>
-            <h1>{title}</h1>
-            <div class="rating-row">
-                <span class="star">&#9733;</span>
-                <span class="rating-val">{rating:.1f}/10</span>
-                <span class="meta-line">based on {rating_count} review{'s' if rating_count != 1 else ''}</span>
-            </div>
-            <div class="meta-line">{meta_line}</div>
-            <div class="synopsis">{synopsis}</div>
-            {credits}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    if trailer_url:
+        credits += (f'<a class="play-btn" href="{_esc(trailer_url)}" target="_blank" '
+                    'rel="noopener noreferrer">&#9654; Watch Trailer</a>')
+
+    plural = "s" if rating_count != 1 else ""
+    st.markdown(
+        f'<div class="backdrop-hero{" compact" if compact else ""}">'
+        f'<div class="bg-img" style="background-image:url(\'{_esc(backdrop_url)}\');"></div>'
+        '<div class="bg-gradient"></div>'
+        '<div class="content">'
+        f'<div class="eyebrow">{_esc(eyebrow)}</div>'
+        f'<h1>{_esc(title)}</h1>'
+        '<div class="rating-row">'
+        f'{star_rating(rating / 2)}'
+        f'<span class="rating-val">{rating:.1f}/10</span>'
+        f'<span class="meta-line">based on {rating_count} review{plural}</span>'
+        '</div>'
+        f'<div class="meta-line">{_esc(meta_line)}</div>'
+        f'<div class="synopsis">{_esc(synopsis)}</div>'
+        f'{credits}'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def render_stat_strip(stats: list[tuple[str, str, str]]):
     """
     stats: list of (label, value, css_gradient) tuples, e.g.
-        [("POSITIVE", "18", "linear-gradient(135deg,#16a34a,#22c55e)"),
-         ("NEGATIVE", "7",  "linear-gradient(135deg,#b91c1c,#ef4444)"),
-         ("NEUTRAL",  "5",  "linear-gradient(135deg,#475569,#94a3b8)")]
+        [("Positive", "18", "linear-gradient(135deg,#16a34a,#22c55e)"), ...]
     """
     cards = "".join(
         f'<div class="stat-card" style="background:{grad};">'
-        f'<div class="label">{label}</div><div class="value">{value}</div></div>'
+        f'<div class="label">{_esc(label)}</div><div class="value">{_esc(value)}</div></div>'
         for label, value, grad in stats
     )
     st.markdown(f'<div class="stat-strip">{cards}</div>', unsafe_allow_html=True)
